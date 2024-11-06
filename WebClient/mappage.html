@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>WebSocket Map Example</title>
+    <!-- Leaflet kütüphanesini dahil et -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+        }
+        #map {
+            height: 100%;
+            width: 100%;
+            margin: 0;
+        }
+        .leaflet-container {
+            height: 100%;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <!-- Harita için bir div -->
+    <div id="map"></div>
+
+    <!-- JavaScript kodunu buraya ekle -->
+    <script>
+        // Leaflet haritasını başlat
+        const map = L.map('map', {
+            center: [20, 0],
+            zoom: 5,  // Varsayılan zoom seviyesi
+            minZoom: 4,
+            maxZoom: 19,
+            maxBounds: [
+                [-60, -180],
+                [80, 180]
+            ],
+            maxBoundsViscosity: 1.0
+        });
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            minZoom: 2,
+            noWrap: true
+        }).addTo(map);
+
+        // Özel ikon tanımlaması
+        const customIcon = L.icon({
+            iconUrl: 'motorbike.png', // Yerel ikon dosyası URL'si
+            iconSize: [32, 32], // İkon boyutu
+            iconAnchor: [16, 32], // İkonun harita üzerindeki bağlantı noktası
+            popupAnchor: [0, -32] // Popup pencerenin konumu
+        });
+
+        // Varsayılan işaretçi simgesi (pointer resmi)
+        const defaultIcon = L.icon({
+            iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png', // Leaflet'in varsayılan işaretçi simgesi
+            iconSize: [25, 41], // İkon boyutu
+            iconAnchor: [12, 41], // İkonun harita üzerindeki bağlantı noktası
+            popupAnchor: [1, -34] // Popup pencerenin konumu
+        });
+
+        let userLocationMarker;
+        const pointers = {};
+
+        // WebSocket bağlantısını kur
+        const socket = new WebSocket('ws://localhost:8080/ws/web'); // Burada 'sunucu_adresi' kısmını gerçek WebSocket URL'nizle değiştirin
+
+        // WebSocket açıldığında
+        socket.onopen = function(event) {
+            console.log('WebSocket is open now.');
+        };
+
+        // WebSocket'ten mesaj alındığında
+        socket.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            const { uuid, lat, lng } = data;
+
+            // Var olan pointer'ı güncelle veya yeni bir pointer oluştur
+            if (pointers[uuid]) {
+                pointers[uuid].setLatLng([lat, lng]);
+            } else {
+                const marker = L.marker([lat, lng], { icon: customIcon }).addTo(map);
+                pointers[uuid] = marker;
+            }
+        };
+
+        // WebSocket hatalarını yönet
+        socket.onerror = function(error) {
+            console.error('WebSocket Error:', error);
+        };
+
+        // WebSocket bağlantısı kapandığında
+        socket.onclose = function(event) {
+            if (event.wasClean) {
+                console.log(`Connection closed cleanly, code=${event.code}, reason=${event.reason}`);
+            } else {
+                console.error('Connection died');
+            }
+        };
+
+        // Sayfa yüklendiğinde kullanıcının mevcut konumunu al ve haritayı merkezle
+        window.onload = function() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(position => {
+                    const { latitude, longitude } = position.coords;
+                    const currentLocation = [latitude, longitude];
+
+                    if (!userLocationMarker) {
+                        userLocationMarker = L.marker(currentLocation, { icon: defaultIcon }).addTo(map);
+                    } else {
+                        userLocationMarker.setLatLng(currentLocation);
+                    }
+                    map.setView(currentLocation, 13); // Başlangıç zoom seviyesi
+                }, error => {
+                    console.error('Error getting geolocation:', error);
+                    alert('Error getting geolocation: ' + error.message);
+                });
+            } else {
+                alert("Geolocation is not supported by this browser.");
+            }
+        };
+
+    </script>
+</body>
+</html>
